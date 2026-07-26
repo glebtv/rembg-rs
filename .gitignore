@@ -15,7 +15,7 @@ Cargo.lock
 
 # ONNX models
 *.onnx
-models/
+/models/
 
 # Web dependencies and generated assets
 web/node_modules/
