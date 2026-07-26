@@ -2,6 +2,14 @@
 
 A Rust library for removing backgrounds from images using neural networks (ONNX Runtime + U2-Net).
 
+## Documentation
+
+- [Implementation summary](docs/summary.md)
+- [Changelog](docs/changelog.md)
+- [Development workflow](docs/workflow.md)
+- [Web server](docs/server.md)
+- [REST API](docs/rest-api.md)
+
 ## � Features
 
 - 🎨 Remove backgrounds from images using pretrained neural networks
@@ -14,8 +22,8 @@ A Rust library for removing backgrounds from images using neural networks (ONNX 
 
 ## 📋 Requirements
 
-- Rust 1.70+
-- ONNX Runtime (installed automatically via `ort` crate)
+- Rust 1.85+ (edition 2024)
+- A compatible system ONNX Runtime library; see [server setup](docs/server.md)
 
 ## 🏗️ Installation
 

@@ -1,6 +1,6 @@
 use clap::Parser;
 use image::{DynamicImage, open};
-use rembg_rs::cli::cli::Args;
+use rembg_rs::cli::cli::{Args, Commands, RemoveBgArgs};
 use rembg_rs::compress_png::compress_png;
 use rembg_rs::manager::ModelManager;
 use rembg_rs::options::RemovalOptionsBuilder;
@@ -11,6 +11,20 @@ use std::process;
 fn main() {
     let args = Args::parse();
 
+    match args.command {
+        Commands::RemoveBg(args) => run_remove_bg(&args),
+
+        #[cfg(feature = "download")]
+        Commands::DownloadModels(args) => {
+            if let Err(e) = rembg_rs::models::download::download_models(&args) {
+                eprintln!("❌ {}", e);
+                process::exit(1);
+            }
+        }
+    }
+}
+
+fn run_remove_bg(args: &RemoveBgArgs) {
     println!("🎨 rembg-rs - Background Removal Tool");
     println!("Input: {:?}", args.input);
     println!("Output: {:?}", args.output);
@@ -20,14 +34,13 @@ fn main() {
     let mut manager = match ModelManager::from_file(Path::new(&args.model)) {
         Ok(m) => m,
         Err(e) => {
-            eprintln!("❌ Failed to manager: {}", e);
+            eprintln!("❌ Failed to load model: {}", e);
             process::exit(1);
         }
     };
 
     println!("✅ Model loaded\n");
 
-    // Load image
     println!("📂 Loading image...");
     let img = match open(&args.input) {
         Ok(img) => img,
@@ -37,7 +50,6 @@ fn main() {
         }
     };
 
-    // Configure options
     let options = RemovalOptionsBuilder::default()
         .threshold(args.threshold)
         .binary(args.binary)
@@ -47,7 +59,6 @@ fn main() {
 
     println!("🖼️  Processing image...");
 
-    // Process the image
     let result = match rembg(&mut manager, img, &options) {
         Ok(result) => result,
         Err(e) => {
@@ -56,10 +67,9 @@ fn main() {
         }
     };
 
-    // Save the result
     println!("💾 Saving result...");
     let result_img: DynamicImage = DynamicImage::ImageRgba8(result.image().clone());
-    if option_env!("NONE").is_none() {
+    if !args.no_compress {
         match compress_png(&result_img) {
             Ok(bytes) => match std::fs::write(&args.output, bytes) {
                 Ok(_) => {}
@@ -69,23 +79,22 @@ fn main() {
                 }
             },
             Err(e) => {
-                eprintln!("❌ Compression failed: {e}");
-                process::exit(1);
+                eprintln!("⚠️  Compression failed ({e}); saving uncompressed PNG");
+                if let Err(save_error) = result_img.save(&args.output) {
+                    eprintln!("❌ Failed to save result: {save_error}");
+                    process::exit(1);
+                }
             }
         }
-    } else {
-        if let Err(e) = result_img.save(&args.output) {
-            eprintln!("❌ Failed to save result: {}", e);
-            process::exit(1);
-        }
+    } else if let Err(e) = result_img.save(&args.output) {
+        eprintln!("❌ Failed to save result: {}", e);
+        process::exit(1);
     }
 
-    // Save mask if requested
     if args.save_mask {
         let mask_path = generate_mask_path(&args.output);
         println!("🎭 Saving mask to: {:?}", mask_path);
 
-        // Save mask as transparent RGBA
         let mask_img = result.mask();
         if let Err(e) = mask_img.save(&mask_path) {
             eprintln!("⚠️  Failed to save mask: {}", e);
@@ -100,7 +109,6 @@ fn main() {
     }
 }
 
-/// Generate mask file path based on output path
 fn generate_mask_path(output_path: &Path) -> std::path::PathBuf {
     let file_stem = output_path
         .file_stem()

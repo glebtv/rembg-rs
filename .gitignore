@@ -17,6 +17,11 @@ Cargo.lock
 *.onnx
 models/
 
+# Web dependencies and generated assets
+web/node_modules/
+web/build/
+/results/
+
 # Test files
 test_input/
 test_output/

@@ -1,8 +1,8 @@
-use image::{RgbImage, RgbaImage};
+use image::{GrayImage, RgbaImage};
 
 pub struct RemovalResult {
     pub image: RgbaImage,
-    pub mask: RgbImage,
+    pub mask: GrayImage,
 }
 
 impl RemovalResult {
@@ -10,11 +10,11 @@ impl RemovalResult {
         &self.image
     }
 
-    pub fn mask(&self) -> &RgbImage {
+    pub fn mask(&self) -> &GrayImage {
         &self.mask
     }
 
-    pub fn into_parts(self) -> (RgbaImage, RgbImage) {
+    pub fn into_parts(self) -> (RgbaImage, GrayImage) {
         (self.image, self.mask)
     }
 }

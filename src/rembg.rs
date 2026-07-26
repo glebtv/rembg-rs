@@ -3,7 +3,7 @@ use crate::error::RembgError;
 use crate::manager::ModelManager;
 use crate::options::RemovalOptions;
 use crate::result::RemovalResult;
-use image::{DynamicImage, GenericImageView, ImageBuffer, Luma, RgbImage, Rgba, RgbaImage};
+use image::{DynamicImage, GenericImageView, GrayImage, Luma, Rgba, RgbaImage};
 use ndarray::{Array4, Axis};
 
 pub fn rembg(
@@ -18,8 +18,7 @@ pub fn rembg(
         let rgb_img = image.to_rgb8();
 
         // Resize image
-        let target_width = 320;
-        let target_height = 320;
+        let (target_width, target_height) = manager.input_dimensions();
         let resized = image::imageops::resize(
             &rgb_img,
             target_width,
@@ -47,35 +46,30 @@ pub fn rembg(
 
     // Postprocess the mask
     let mask = {
-        use image::imageops::FilterType;
-
-        // gamma for visualization
-        let gamma: f32 = 0.5;
-
-        // extract first batch/channel
         let temp_axis = mask_output.index_axis(Axis(0), 0);
         let mask_data = temp_axis.index_axis(Axis(0), 0);
         let (model_height, model_width) = mask_data.dim();
 
-        // build LUT
-        let g = gamma.clamp(0.2, 5.0);
-        let mut lut = [(0u8, 0u8, 0u8); 256];
-        for i in 0..256 {
-            let t = (i as f32 / 255.0).powf(g);
-            lut[i] = colormap(t);
+        let min = mask_data.iter().copied().fold(f32::INFINITY, f32::min);
+        let max = mask_data.iter().copied().fold(f32::NEG_INFINITY, f32::max);
+        let apply_sigmoid = min < 0.0 || max > 1.0;
+        let transformed_min = if apply_sigmoid { sigmoid(min) } else { min };
+        let transformed_max = if apply_sigmoid { sigmoid(max) } else { max };
+        let range = (transformed_max - transformed_min).max(f32::EPSILON);
+
+        let mut gray = GrayImage::new(model_width as u32, model_height as u32);
+        for (x, y, pixel) in gray.enumerate_pixels_mut() {
+            let value = mask_data[[y as usize, x as usize]];
+            let value = if apply_sigmoid { sigmoid(value) } else { value };
+            *pixel = Luma([(((value - transformed_min) / range) * 255.0).clamp(0.0, 255.0) as u8]);
         }
 
-        // fill heatmap image
-        let mut heat = RgbImage::new(model_width as u32, model_height as u32);
-        for (x, y, pixel) in heat.enumerate_pixels_mut() {
-            let v = mask_data[[y as usize, x as usize]];
-            let s = 1.0 / (1.0 + (-v).exp());
-            let idx = (s * 255.0).round() as usize;
-            let (r, g, b) = lut[idx.min(255)];
-            *pixel = image::Rgb([r, g, b]);
-        }
-
-        image::imageops::resize(&heat, original_width, original_height, FilterType::Lanczos3)
+        image::imageops::resize(
+            &gray,
+            original_width,
+            original_height,
+            image::imageops::FilterType::Lanczos3,
+        )
     };
 
     // Apply mask to original image
@@ -91,31 +85,6 @@ pub fn rembg(
             )));
         }
 
-        let temp_axis = mask_output.index_axis(Axis(0), 0);
-        let mask_data = temp_axis.index_axis(Axis(0), 0);
-        let (model_h, model_w) = mask_data.dim();
-
-        let need_resize = (model_w as u32 != width) || (model_h as u32 != height);
-        let mut mask_gray: ImageBuffer<Luma<u8>, Vec<u8>> =
-            ImageBuffer::new(model_w as u32, model_h as u32);
-
-        for (x, y, pixel) in mask_gray.enumerate_pixels_mut() {
-            let v = mask_data[[y as usize, x as usize]];
-            let s = 1.0 / (1.0 + (-v).exp());
-            pixel.0[0] = (s * 255.0).clamp(0.0, 255.0) as u8;
-        }
-
-        let mask_resized = if need_resize {
-            image::imageops::resize(
-                &mask_gray,
-                width,
-                height,
-                image::imageops::FilterType::Lanczos3,
-            )
-        } else {
-            mask_gray
-        };
-
         let mut result = RgbaImage::new(width, height);
         let thr_u8 = options.threshold;
         let thr_f = thr_u8 as f32;
@@ -127,7 +96,7 @@ pub fn rembg(
         };
 
         for (x, y, src) in rgba_img.enumerate_pixels() {
-            let mask_value = mask_resized.get_pixel(x, y).0[0];
+            let mask_value = mask.get_pixel(x, y).0[0];
 
             let alpha: u8 = if options.binary {
                 if mask_value >= thr_u8 { 255 } else { 0 }
@@ -135,7 +104,7 @@ pub fn rembg(
                 match smooth_scale {
                     Some(scale) => {
                         let mv = mask_value as f32;
-                        ((mv - thr_f) * scale * 255.0).clamp(0.0, 255.0).round() as u8
+                        ((mv - thr_f) * scale).clamp(0.0, 255.0).round() as u8
                     }
                     None => {
                         if mask_value == 255 {
@@ -147,6 +116,7 @@ pub fn rembg(
                 }
             };
 
+            let alpha = ((alpha as u16 * src.0[3] as u16 + 127) / 255) as u8;
             result.put_pixel(x, y, Rgba([src.0[0], src.0[1], src.0[2], alpha]));
         }
 
@@ -163,39 +133,7 @@ pub fn rembg(
     })
 }
 
-// --- Inlined preprocessor/processor helpers ---
-
 #[inline]
-fn lerp(a: (u8, u8, u8), b: (u8, u8, u8), t: f32) -> (u8, u8, u8) {
-    let (ar, ag, ab) = a;
-    let (br, bg, bb) = b;
-    let r = ar as f32 + (br as f32 - ar as f32) * t;
-    let g = ag as f32 + (bg as f32 - ag as f32) * t;
-    let b = ab as f32 + (bb as f32 - ab as f32) * t;
-    (r.round() as u8, g.round() as u8, b.round() as u8)
-}
-
-static STOPS: &[(f32, (u8, u8, u8))] = &[
-    (0.00, (0, 0, 0)),
-    (0.15, (0, 0, 64)),
-    (0.30, (0, 0, 255)),
-    (0.45, (128, 0, 192)),
-    (0.60, (255, 0, 0)),
-    (0.75, (255, 128, 0)),
-    (0.90, (255, 255, 0)),
-    (1.00, (255, 255, 255)),
-];
-
-#[inline]
-fn colormap(t: f32) -> (u8, u8, u8) {
-    let t = t.clamp(0.0, 1.0);
-    for w in STOPS.windows(2) {
-        let (t0, c0) = (w[0].0, w[0].1);
-        let (t1, c1) = (w[1].0, w[1].1);
-        if t <= t1 {
-            let local = if t1 > t0 { (t - t0) / (t1 - t0) } else { 0.0 };
-            return lerp(c0, c1, local);
-        }
-    }
-    STOPS.last().unwrap().1
+fn sigmoid(value: f32) -> f32 {
+    1.0 / (1.0 + (-value).exp())
 }

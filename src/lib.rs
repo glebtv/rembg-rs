@@ -1,10 +1,13 @@
-// CLI module is optional and compiled only when `cli` feature is enabled
+mod clean_sticker_border;
 #[cfg(feature = "cli")]
 pub mod cli;
+pub mod compress_png;
 pub mod error;
 pub mod manager;
+pub mod models;
 pub mod options;
 pub mod rembg;
 pub mod result;
-mod clean_sticker_border;
-pub mod compress_png;
+
+#[cfg(feature = "server")]
+pub mod server;
