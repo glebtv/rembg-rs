@@ -13,6 +13,7 @@ pub struct ServerConfig {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RemoveBgRequest {
+    pub model: Option<String>,
     pub threshold: Option<u8>,
     pub binary: Option<bool>,
     pub sticker: Option<bool>,
@@ -36,9 +37,19 @@ pub struct RemoveBgResponse {
 #[serde(rename_all = "camelCase")]
 pub struct ConfigResponse {
     pub model_path: String,
+    pub default_model: String,
+    pub models: Vec<ModelResponse>,
     pub host: String,
     pub port: u16,
     pub auth_required: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelResponse {
+    pub id: String,
+    pub name: String,
+    pub description: String,
 }
 
 #[derive(Debug, Serialize)]

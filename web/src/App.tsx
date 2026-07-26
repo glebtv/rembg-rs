@@ -1,9 +1,9 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { UploadArea } from './components/UploadArea';
 import { OptionsPanel } from './components/OptionsPanel';
 import { ResultView } from './components/ResultView';
-import { removeBackground, checkHealth, getConfig, validateApiKey, RemoveBgParams } from './api/client';
-import { Spinner, Card, Divider } from '@heroui/react';
+import { removeBackground, checkHealth, getConfig, validateApiKey, RemoveBgParams, ModelOption } from './api/client';
+import { Spinner, Card } from '@heroui/react';
 
 interface ProcessingState {
   isProcessing: boolean;
@@ -28,6 +28,8 @@ function App() {
   const [apiKey, setApiKey] = useState('');
   const [apiKeyInput, setApiKeyInput] = useState('');
   const [authError, setAuthError] = useState<string | null>(null);
+  const [models, setModels] = useState<ModelOption[]>([]);
+  const [model, setModel] = useState('');
 
   const [threshold, setThreshold] = useState(160);
   const [binary, setBinary] = useState(false);
@@ -38,7 +40,11 @@ function App() {
 
   useEffect(() => {
     checkHealth().then(setServerHealthy);
-    getConfig().then((config) => setAuthRequired(config.authRequired)).catch(() => {});
+    getConfig().then((config) => {
+      setAuthRequired(config.authRequired);
+      setModels(config.models);
+      setModel(config.defaultModel);
+    }).catch(() => {});
   }, []);
 
   const handleApiKeySubmit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -68,6 +74,7 @@ function App() {
 
     try {
       const params: RemoveBgParams = {
+        model: model || undefined,
         threshold,
         binary,
         sticker,
@@ -93,7 +100,7 @@ function App() {
         error: err instanceof Error ? err.message : 'Failed to process image',
       });
     }
-  }, [file, threshold, binary, sticker, compress, format, includeMask, resultUrl, maskUrl, apiKey]);
+  }, [file, model, threshold, binary, sticker, compress, format, includeMask, resultUrl, maskUrl, apiKey]);
 
   const handleDownload = useCallback((url: string, filename: string) => {
     const a = document.createElement('a');
@@ -117,14 +124,15 @@ function App() {
 
   return (
     <div className="min-h-screen">
-      <div className="max-w-4xl mx-auto px-4 py-8 space-y-8">
-        <header className="text-center space-y-2">
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-violet-400 via-cyan-400 to-violet-400 bg-clip-text text-transparent">
+      <div className="app-shell">
+        <header className="app-header">
+          <div className="brand-mark" aria-hidden="true">R</div>
+          <div>
+          <h1>
             rembg-rs
           </h1>
-          <p className="text-sm text-slate-400">
-            AI-powered background removal
-          </p>
+          <p>Precise background removal, running on your server.</p>
+          </div>
           {serverHealthy === false && (
             <Card className="bg-red-500/10 border-red-500/30 inline-flex items-center gap-2 px-4 py-2 text-xs text-red-300">
               Server unavailable
@@ -158,7 +166,7 @@ function App() {
               </button>
             </form>
           </Card>
-        ) : <main className="space-y-6">
+        ) : <main className="workspace">
           {!file ? (
             <UploadArea onFileSelect={handleFileSelect} />
           ) : (
@@ -174,9 +182,12 @@ function App() {
             />
           )}
 
-          <div className="flex gap-6 flex-wrap">
-            <div className="flex-1 min-w-0">
+          <div className="control-layout">
+            <div className="min-w-0">
               <OptionsPanel
+                models={models}
+                model={model}
+                setModel={setModel}
                 threshold={threshold}
                 setThreshold={setThreshold}
                 binary={binary}
@@ -191,15 +202,15 @@ function App() {
                 setIncludeMask={setIncludeMask}
               />
             </div>
-            <div className="flex flex-col justify-end">
+            <div className="action-column">
               <button
                 onClick={handleProcess}
                 data-testid="process-image"
                 disabled={!file || processing.isProcessing}
-                className={`flex items-center gap-2 px-6 py-3 rounded-full font-medium text-sm transition-all ${
+                className={`process-button ${
                   file && !processing.isProcessing
-                    ? 'bg-gradient-to-r from-violet-500 to-cyan-500 text-white shadow-lg shadow-violet-500/25 hover:shadow-violet-500/40 hover:scale-105 active:scale-95'
-                    : 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                    ? 'process-button-ready'
+                    : 'process-button-disabled'
                 }`}
               >
                 {processing.isProcessing ? (
@@ -226,9 +237,6 @@ function App() {
           )}
         </main>}
 
-        <footer className="text-center text-xs text-slate-500 pt-4">
-          <p>Powered by ONNX Runtime</p>
-        </footer>
       </div>
     </div>
   );

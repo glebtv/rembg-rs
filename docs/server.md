@@ -1,6 +1,6 @@
 # Web Server
 
-`rembg-server` is an Axum application that loads one ONNX model at startup, serializes access to its ONNX Runtime session, exposes the REST API, and serves the production Vite build from `web/build`.
+`rembg-server` is an Axum application that loads an ONNX model at startup, discovers other ONNX models in the same directory, serializes access to its active ONNX Runtime session, exposes the REST API, and serves the production Vite build from `web/build`.
 
 ## Requirements
 
@@ -43,6 +43,16 @@ Supported environment variables:
 
 The generated key is printed once by the launcher. Enter it in the web form or use it as documented in [rest-api.md](rest-api.md).
 
+## Manual API Test
+
+With a server already running, process every image in `test-images/` and save the responses under `results/`:
+
+```bash
+API_KEY='your-secret' bin/test-api.sh
+```
+
+`SERVER_URL` defaults to `http://127.0.0.1:8020`. Set `IMAGE_PATH` to process one image, `MODEL` to select a model ID returned by `/api/config`, and `FORMAT`, `THRESHOLD`, or `RESULT_DIR` to override their defaults.
+
 ## Direct Startup
 
 ```bash
@@ -64,7 +74,7 @@ When authentication is enabled, `/api/config` tells the web application that a k
 ## Runtime Behavior
 
 - CUDA is requested first and CPU is the explicit fallback.
-- Model loading happens once during startup.
+- The startup model is loaded immediately. Selecting another discovered model replaces the active session lazily, so all models are not held in GPU memory at once.
 - Requests lock the model session, so inference is serialized.
 - `/healthz`, `/api/config`, and static frontend assets remain public.
 - Authentication protects validation and background-removal API operations.

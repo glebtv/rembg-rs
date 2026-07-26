@@ -11,7 +11,7 @@ struct Args {
     #[arg(short, long, default_value = "u2net.onnx")]
     model: PathBuf,
 
-    #[arg(short, long, default_value = "0.0.0.0")]
+    #[arg(short = 'H', long, default_value = "0.0.0.0")]
     host: String,
 
     #[arg(short, long, default_value_t = 8080)]

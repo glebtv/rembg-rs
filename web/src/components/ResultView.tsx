@@ -1,4 +1,3 @@
-import React from 'react';
 import { Card, Button } from '@heroui/react';
 import { ImagePreview } from './ImagePreview';
 
@@ -26,14 +25,14 @@ export function ResultView({
   if (!originalUrl && !resultUrl) return null;
 
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+    <div className="result-view">
+      <div className="preview-grid">
         <ImagePreview src={originalUrl} title="Original" />
-        <div className="flex flex-col gap-2">
-          <span className="text-xs font-medium text-slate-300 uppercase tracking-wide">
+        <div className="preview-column">
+          <span className="preview-label">
             Result
           </span>
-          <div className="relative rounded-xl overflow-hidden bg-slate-800/60 border border-slate-700/50 aspect-square flex items-center justify-center">
+          <div className="image-stage image-stage-result">
             {isProcessing ? (
               <div className="flex flex-col items-center gap-2">
                 <div className="w-8 h-8 border-2 border-violet-500/30 border-t-violet-500 rounded-full animate-spin" />
@@ -43,7 +42,7 @@ export function ResultView({
               <img
                 src={resultUrl}
                 alt="Result"
-                className="w-full h-full object-contain"
+                className="preview-image"
                 data-testid="result-image"
               />
             ) : (
@@ -55,7 +54,7 @@ export function ResultView({
 
       {maskUrl && <ImagePreview src={maskUrl} title="Mask" />}
 
-      <div className="flex gap-2 flex-wrap">
+      <div className="result-actions">
         {resultUrl && (
           <Button
             size="sm"

@@ -5,6 +5,7 @@ const api = axios.create({
 });
 
 export interface RemoveBgParams {
+  model?: string;
   threshold?: number;
   binary?: boolean;
   sticker?: boolean;
@@ -32,6 +33,7 @@ interface RemoveBgJsonResponse {
 export async function removeBackground(file: File, params: RemoveBgParams, apiKey?: string): Promise<RemoveBgResult> {
   const formData = new FormData();
   formData.append('image', file);
+  if (params.model !== undefined) formData.append('model', params.model);
   if (params.threshold !== undefined) formData.append('threshold', String(params.threshold));
   if (params.binary !== undefined) formData.append('binary', String(params.binary));
   if (params.sticker !== undefined) formData.append('sticker', String(params.sticker));
@@ -77,9 +79,17 @@ function contentDispositionFilename(value: string | undefined): string | null {
 
 export interface ConfigResponse {
   modelPath: string;
+  defaultModel: string;
+  models: ModelOption[];
   host: string;
   port: number;
   authRequired: boolean;
+}
+
+export interface ModelOption {
+  id: string;
+  name: string;
+  description: string;
 }
 
 export async function validateApiKey(apiKey: string): Promise<boolean> {

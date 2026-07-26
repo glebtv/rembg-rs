@@ -11,6 +11,8 @@
 - Added responsive single-column output cards on narrow screens.
 - Removed the stale Vite favicon reference.
 - Added API-key entry and validation without storing the raw key in local or session storage.
+- Refined the responsive layout, aligned the settings and action controls, and added a model selector.
+- Removed the ONNX Runtime attribution footer.
 
 ### HTTP Server And API
 
@@ -24,6 +26,8 @@
 - Fixed uploaded filename stem extraction.
 - Added PNG, JPEG, and WebP encoding; JPEG output is composited onto white because JPEG has no alpha channel.
 - Restricted static serving to `web/build` and added an SPA index fallback without exposing repository files.
+- Added server-advertised model discovery and lazy model switching for ONNX files beside the startup model.
+- Fixed the server CLI host shorthand conflict by assigning `-H` to `--host`.
 
 ### Inference And Images
 
@@ -44,6 +48,7 @@
 - Verified 15 models against 3 images: 45 successful inference cases on CUDA.
 - Added a ChromeDriver test covering upload, mask selection, processing, decoded previews, and real result/mask downloads.
 - Added `bin/test-all-models.sh`, `bin/test-web.sh`, and `bin/start-server.sh`.
+- Added `bin/test-api.sh` for manual health, config, and real image-request smoke tests against a running server.
 - Added GitHub Actions jobs for formatting, Clippy, non-inference Rust tests, npm installation, and the production web build.
 - Added API-key unit tests.
 - Added generated web dependencies, assets, results, and local model files to ignore rules where applicable.

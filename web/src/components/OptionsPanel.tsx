@@ -1,22 +1,54 @@
-import React from 'react';
-import { Card, Slider, Switch, Select, SelectItem } from '@heroui/react';
+import type { CSSProperties } from 'react';
+import type { ModelOption } from '../api/client';
 
 interface OptionsPanelProps {
+  models: ModelOption[];
+  model: string;
+  setModel: (value: string) => void;
   threshold: number;
-  setThreshold: (v: number) => void;
+  setThreshold: (value: number) => void;
   binary: boolean;
-  setBinary: (v: boolean) => void;
+  setBinary: (value: boolean) => void;
   sticker: boolean;
-  setSticker: (v: boolean) => void;
+  setSticker: (value: boolean) => void;
   compress: boolean;
-  setCompress: (v: boolean) => void;
+  setCompress: (value: boolean) => void;
   format: 'png' | 'jpeg' | 'webp';
-  setFormat: (v: 'png' | 'jpeg' | 'webp') => void;
+  setFormat: (value: 'png' | 'jpeg' | 'webp') => void;
   includeMask: boolean;
-  setIncludeMask: (v: boolean) => void;
+  setIncludeMask: (value: boolean) => void;
+}
+
+interface ToggleProps {
+  label: string;
+  hint: string;
+  checked: boolean;
+  onChange: (value: boolean) => void;
+  testId?: string;
+}
+
+function Toggle({ label, hint, checked, onChange, testId }: ToggleProps) {
+  return (
+    <label className="option-toggle">
+      <span>
+        <strong>{label}</strong>
+        <small>{hint}</small>
+      </span>
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(event) => onChange(event.target.checked)}
+        data-testid={testId}
+      />
+      <span className="toggle-track" aria-hidden="true" />
+    </label>
+  );
 }
 
 export function OptionsPanel({
+  models,
+  model,
+  setModel,
   threshold,
   setThreshold,
   binary,
@@ -30,92 +62,70 @@ export function OptionsPanel({
   includeMask,
   setIncludeMask,
 }: OptionsPanelProps) {
+  const selectedModel = models.find((option) => option.id === model);
+
   return (
-    <Card className="bg-slate-800/40 border-slate-700/40 backdrop-blur-sm">
-      <div className="space-y-5 p-1">
+    <section className="options-panel" aria-labelledby="settings-heading">
+      <div className="panel-heading">
         <div>
-          <Slider
-            label="Threshold"
-            value={threshold}
-            onChange={(v) => setThreshold(v as number)}
-            minValue={0}
-            maxValue={255}
-            step={1}
-            size="sm"
-            color="violet"
-            className="max-w-md"
-          />
-          <p className="text-xs text-slate-400 mt-1">
-            Higher = more aggressive removal
-          </p>
+          <p className="eyebrow">Processing</p>
+          <h2 id="settings-heading">Output settings</h2>
         </div>
-
-        <div className="flex items-center justify-between">
-          <span className="text-sm text-slate-200">Binary mode</span>
-          <Switch
-            isSelected={binary}
-            onValueChange={setBinary}
-            size="sm"
-            color="violet"
-          >
-            Hard edges
-          </Switch>
-        </div>
-
-        <div className="flex items-center justify-between">
-          <span className="text-sm text-slate-200">Sticker mode</span>
-          <Switch
-            isSelected={sticker}
-            onValueChange={setSticker}
-            size="sm"
-            color="violet"
-          >
-            Outline border
-          </Switch>
-        </div>
-
-        <div className="flex items-center justify-between">
-          <span className="text-sm text-slate-200">Compress PNG</span>
-          <Switch
-            isSelected={compress}
-            onValueChange={setCompress}
-            size="sm"
-            color="violet"
-          >
-            Smaller file
-          </Switch>
-        </div>
-
-        <div>
-          <Select
-            label="Format"
-            selectedKeys={[format]}
-            onSelectionChange={(keys) => {
-              const val = Array.from(keys)[0] as 'png' | 'jpeg' | 'webp';
-              if (val) setFormat(val);
-            }}
-            size="sm"
-            className="max-w-xs"
-          >
-            <SelectItem key="png">PNG</SelectItem>
-            <SelectItem key="jpeg">JPEG</SelectItem>
-            <SelectItem key="webp">WebP</SelectItem>
-          </Select>
-        </div>
-
-        <div className="flex items-center justify-between">
-          <span className="text-sm text-slate-200">Include mask</span>
-          <Switch
-            data-testid="include-mask"
-            isSelected={includeMask}
-            onValueChange={setIncludeMask}
-            size="sm"
-            color="violet"
-          >
-            Return mask image
-          </Switch>
-        </div>
+        <span className="settings-badge">Local inference</span>
       </div>
-    </Card>
+
+      <div className="select-grid">
+        <label className="field-label">
+          <span>Model</span>
+          <select
+            value={model}
+            onChange={(event) => setModel(event.target.value)}
+            data-testid="model-select"
+          >
+            {models.map((option) => (
+              <option key={option.id} value={option.id}>{option.name}</option>
+            ))}
+          </select>
+          <small>{selectedModel?.description ?? 'Server default model'}</small>
+        </label>
+
+        <label className="field-label">
+          <span>Output format</span>
+          <select
+            value={format}
+            onChange={(event) => setFormat(event.target.value as 'png' | 'jpeg' | 'webp')}
+          >
+            <option value="png">PNG, transparent</option>
+            <option value="webp">WebP, transparent</option>
+            <option value="jpeg">JPEG, white background</option>
+          </select>
+          <small>PNG preserves the cleanest transparent edge.</small>
+        </label>
+      </div>
+
+      <label className="threshold-field">
+        <span className="threshold-heading">
+          <span>Removal threshold</span>
+          <output>{threshold}</output>
+        </span>
+        <input
+          type="range"
+          value={threshold}
+          onChange={(event) => setThreshold(Number(event.target.value))}
+          min="0"
+          max="255"
+          step="1"
+          style={{ '--range-progress': `${(threshold / 255) * 100}%` } as CSSProperties}
+        />
+        <small>Increase for more aggressive background removal.</small>
+      </label>
+
+      <div className="toggle-grid">
+        <Toggle label="Binary edges" hint="Create a hard alpha edge" checked={binary} onChange={setBinary} />
+        <Toggle label="Sticker outline" hint="Add a border around the subject" checked={sticker} onChange={setSticker} />
+        <Toggle label="Compress PNG" hint="Reduce the final file size" checked={compress} onChange={setCompress} />
+        <Toggle label="Include mask" hint="Generate a separate mask image" checked={includeMask} onChange={setIncludeMask} testId="include-mask" />
+      </div>
+    </section>
   );
 }

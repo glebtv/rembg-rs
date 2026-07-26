@@ -16,7 +16,9 @@ use crate::error::RembgError;
 use crate::options::RemovalOptions;
 use crate::rembg::rembg;
 use crate::server::state::AppState;
-use crate::server::types::{ConfigResponse, ErrorResponse, RemoveBgRequest, RemoveBgResponse};
+use crate::server::types::{
+    ConfigResponse, ErrorResponse, ModelResponse, RemoveBgRequest, RemoveBgResponse,
+};
 
 pub fn create_router(app_state: AppState) -> Router {
     let cors = CorsLayer::new()
@@ -45,6 +47,22 @@ pub async fn healthz() -> &'static str {
 pub async fn get_config(state: State<AppState>) -> Json<ConfigResponse> {
     Json(ConfigResponse {
         model_path: state.config.model_path.to_string_lossy().to_string(),
+        default_model: state
+            .config
+            .model_path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or("model.onnx")
+            .to_string(),
+        models: state
+            .available_models
+            .iter()
+            .map(|model| ModelResponse {
+                id: model.id.clone(),
+                name: model.name.clone(),
+                description: model.description.clone(),
+            })
+            .collect(),
         host: state.config.host.clone(),
         port: state.config.port,
         auth_required: state.config.auth_required,
@@ -71,6 +89,7 @@ pub async fn remove_bg(
     let mut file_bytes: Option<Vec<u8>> = None;
     let mut file_name = "input.png".to_string();
     let mut request_data = RemoveBgRequest {
+        model: None,
         threshold: None,
         binary: None,
         sticker: None,
@@ -102,6 +121,9 @@ pub async fn remove_bg(
                 request_data.threshold = std::str::from_utf8(&value)
                     .ok()
                     .and_then(|s| s.parse().ok());
+            }
+            Some("model") => {
+                request_data.model = std::str::from_utf8(&value).ok().map(str::to_string);
             }
             Some("binary") => {
                 request_data.binary = std::str::from_utf8(&value)
@@ -144,11 +166,38 @@ pub async fn remove_bg(
         sticker: request_data.sticker.unwrap_or(false),
     };
 
+    let default_model = state
+        .config
+        .model_path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("model.onnx");
+    let selected_model_id = request_data.model.as_deref().unwrap_or(default_model);
+    let selected_model = state
+        .available_models
+        .iter()
+        .find(|model| model.id == selected_model_id)
+        .ok_or_else(|| AppError::BadRequest("Unknown model".to_string()))?
+        .clone();
+
     let result = tokio::task::spawn_blocking({
         let model_guard = state.model.clone();
         move || {
             let mut model = model_guard.blocking_lock();
-            rembg(&mut model, img, &options)
+            if model.id != selected_model.id || model.manager.is_none() {
+                tracing::info!(model = %selected_model.name, "Switching inference model");
+                // Release the current GPU session before allocating the replacement.
+                model.manager = None;
+                model.manager = Some(crate::manager::ModelManager::from_file(
+                    &selected_model.path,
+                )?);
+                model.id = selected_model.id;
+            }
+            rembg(
+                model.manager.as_mut().expect("model was loaded above"),
+                img,
+                &options,
+            )
         }
     })
     .await

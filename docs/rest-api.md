@@ -42,6 +42,14 @@ Example response:
 ```json
 {
   "modelPath": "models/u2net.onnx",
+  "defaultModel": "u2net.onnx",
+  "models": [
+    {
+      "id": "u2net.onnx",
+      "name": "U2Net",
+      "description": "U2Net - Universal background removal (general purpose)"
+    }
+  ],
   "host": "0.0.0.0",
   "port": 8020,
   "authRequired": true
@@ -67,6 +75,7 @@ Processes one image supplied as `multipart/form-data`.
 | Field | Type | Default | Description |
 | --- | --- | --- | --- |
 | `image` or `file` | file | required | PNG, JPEG, WebP, or another format supported by `image` |
+| `model` | string | startup model | Model ID advertised by `/api/config` |
 | `threshold` | integer `0..255` | `160` | Alpha threshold; higher values remove more |
 | `binary` | boolean | `false` | Produce hard transparent/opaque alpha |
 | `sticker` | boolean | `false` | Apply sticker-border processing |
@@ -82,6 +91,7 @@ With `includeMask=false`, the response body is the encoded image. `Content-Type`
 curl --fail \
   -H "X-API-Key: $API_KEY" \
   -F image=@test-images/dragon.jpg \
+  -F model=u2net.onnx \
   -F threshold=160 \
   -F format=png \
   --output result.png \
