@@ -1,6 +1,7 @@
 use crate::error::RembgError;
 use ndarray::Array;
 use ort::{
+    environment::Environment,
     ep,
     session::{
         Session,
@@ -10,6 +11,7 @@ use ort::{
     value::ValueType,
 };
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 pub struct ModelManager {
     session: Session,
@@ -26,13 +28,11 @@ impl ModelManager {
         if !model_path.is_file() {
             return Err(RembgError::ModelNotFound(model_path.display().to_string()));
         }
-        ensure_onnxruntime_available()?;
+        let environment = onnx_environment()?;
 
         // Create session with model file (uses memory mapping)
-        let mut session_builder = SessionBuilder::new().map_err(RembgError::OnnxError)?;
-        session_builder = session_builder
-            .with_execution_providers([ep::CUDA::default().build(), ep::CPU::default().build()])
-            .map_err(|e| RembgError::OnnxError(e.into()))?;
+        let mut session_builder =
+            SessionBuilder::new(environment).map_err(RembgError::OnnxError)?;
         session_builder = session_builder
             .with_optimization_level(GraphOptimizationLevel::Level3)
             .map_err(|e| RembgError::OnnxError(e.into()))?;
@@ -131,6 +131,30 @@ impl ModelManager {
 
         Ok(output_4d)
     }
+}
+
+/// Create (once) and return the process-wide ONNX Runtime environment.
+///
+/// `ort` 2.0.0-rc.14 requires an [`Environment`] to build sessions, and the
+/// environment carries the execution-provider registration. ONNX Runtime
+/// recommends a single environment per process, so it is cached and reused when
+/// the active model is swapped.
+fn onnx_environment() -> Result<&'static Environment, RembgError> {
+    static ENVIRONMENT: OnceLock<Environment> = OnceLock::new();
+
+    if let Some(environment) = ENVIRONMENT.get() {
+        return Ok(environment);
+    }
+
+    ensure_onnxruntime_available()?;
+
+    let environment = ort::init()
+        .with_name("rembg-rs")
+        .with_execution_providers([ep::CUDA::default().build(), ep::CPU::default().build()])
+        .build()
+        .map_err(RembgError::OnnxError)?;
+
+    Ok(ENVIRONMENT.get_or_init(|| environment))
 }
 
 fn ensure_onnxruntime_available() -> Result<(), RembgError> {

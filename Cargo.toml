@@ -34,7 +34,7 @@ download = ["dep:ureq", "dep:md-5", "dep:sha2"]
 image = { version = "0.25.9", features = ["png", "jpeg", "webp"] }
 
 # ONNX Runtime for neural network inference
-ort = { version = "2.0.0-rc.10", features = ["load-dynamic"] }
+ort = { version = "2.0.0-rc.14", features = ["load-dynamic", "cuda"] }
 libloading = "0.9"
 
 # Tensor operations
@@ -68,7 +68,11 @@ md-5 = { version = "0.10", optional = true }
 sha2 = { version = "0.10", optional = true }
 
 [dev-dependencies]
-thirtyfour = "0.37"
+# `manager` (default) pulls in `zip ^8`, which has been fully yanked from
+# crates.io, and `zip` 9 is not yet API-compatible with thirtyfour 0.37.x.
+# The E2E suite drives an externally-started ChromeDriver via
+# `WebDriver::builder`, so the managed-driver feature is not required.
+thirtyfour = { version = "0.37", default-features = false, features = ["reqwest", "rustls"] }
 
 [profile.release]
 lto = true
